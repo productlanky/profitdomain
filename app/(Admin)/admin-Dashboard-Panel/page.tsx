@@ -165,7 +165,7 @@ export default function DashboardPage() {
         );
 
         const formatted: UserRow[] = res.documents
-          // .filter((u) => !u.labels || !u.labels.includes("admin"))
+          .filter((u) => !u.labels || !u.labels.includes("admin"))
           .map((u: any) => ({
             id: u.$id,
             name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || "Unknown",
