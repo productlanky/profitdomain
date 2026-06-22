@@ -105,7 +105,6 @@ function renderUserStatusBadge(status?: string) {
   );
 }
 
-
 export default function DashboardPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [search, setSearch] = useState("");
@@ -158,17 +157,15 @@ export default function DashboardPage() {
         const res = await databases.listDocuments(
           DB_ID,
           PROFILE_COLLECTION_ID,
-          [Query.orderDesc("$createdAt"),
-          Query.limit(200),
-          ]
-
+          [Query.orderDesc("$createdAt"), Query.limit(200)],
         );
 
         const formatted: UserRow[] = res.documents
           .filter((u) => !u.labels || !u.labels.includes("admin"))
           .map((u: any) => ({
             id: u.$id,
-            name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || "Unknown",
+            name:
+              `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || "Unknown",
             image: "/images/user/user-38.jpg", // swap to u.avatar if available
             email: u.email ?? "—",
             gender: u.gender ?? "—",
@@ -176,7 +173,7 @@ export default function DashboardPage() {
             phone: u.phone ?? "—",
             balance: parseFloat(u.totalDeposit) || 0,
             created_at: u.$createdAt,
-            status: u.status
+            status: u.status,
           }));
 
         setUsers(formatted);
@@ -196,7 +193,7 @@ export default function DashboardPage() {
         const doc: any = await databases.getDocument(
           DB_ID,
           STOCK_PRICE_COLLECTION_ID,
-          STOCK_PRICE_DOC_ID
+          STOCK_PRICE_DOC_ID,
         );
 
         setStockForm({
@@ -224,13 +221,13 @@ export default function DashboardPage() {
       (u) =>
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
-        u.country.toLowerCase().includes(q)
+        u.country.toLowerCase().includes(q),
     );
   }, [users, search]);
 
   const totalBalance = useMemo(
     () => filteredUsers.reduce((sum, u) => sum + u.balance, 0),
-    [filteredUsers]
+    [filteredUsers],
   );
 
   const handleStockChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,7 +253,7 @@ export default function DashboardPage() {
           spacex: toNumber(stockForm.spacex),
           neuralink: toNumber(stockForm.neuralink),
           boring: toNumber(stockForm.boring),
-        }
+        },
       );
 
       toast.success("Stock prices updated");
@@ -412,7 +409,6 @@ export default function DashboardPage() {
                     <TableCell className="px-5 py-4 capitalize">
                       {renderUserStatusBadge(user.status)}
                     </TableCell>
-
                   </TableRow>
                 ))}
 
@@ -480,9 +476,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="px-4 md:px-10">
-        {renderTabContent()}
-      </div>
+      <div className="px-4 md:px-10">{renderTabContent()}</div>
 
       {/* Stock price modal */}
       <Modal isOpen={isOpen} onClose={closeModal} className="m-4 max-w-md">
@@ -496,7 +490,6 @@ export default function DashboardPage() {
           </p>
 
           <form onSubmit={handleSaveStockPrices} className="space-y-4">
-
             <div className="space-y-1">
               <Label htmlFor="spacex">SpaceX</Label>
               <Input
@@ -549,7 +542,11 @@ export default function DashboardPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={stockSaving || stockLoading}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={stockSaving || stockLoading}
+              >
                 {stockSaving ? "Saving..." : "Save prices"}
               </Button>
             </div>
