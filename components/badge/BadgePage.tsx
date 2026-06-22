@@ -1,60 +1,89 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { 
-  TrendingUp, 
-  Users, 
-  Trophy, 
-  Lock, 
-  CheckCircle2, 
-  Crown, 
-  Zap, 
-  Shield, 
-  Award, 
-  Star,
-  ChevronRight,
-  ArrowUp
-} from "lucide-react";
-import { tierList } from "@/lib/data/info";
+import { useEffect, useState } from "react";
 import {
-  databases,
-  DB_ID,
-  PROFILE_COLLECTION_ID,
-  TRANSACTION_COLLECTION,
-} from "@/lib/appwrite/client";
+  AlertTriangle,
+  ShieldCheck,
+  Star,
+  Zap,
+  Crown,
+  Trophy,
+  CheckCircle2,
+  HeadphonesIcon,
+  Loader2,
+  ShieldAlert,
+} from "lucide-react";
+import { databases, DB_ID, PROFILE_COLLECTION_ID } from "@/lib/appwrite/client";
 import { Query } from "appwrite";
 import { getUser } from "@/lib/appwrite/auth";
 import { cn } from "@/lib/utils";
 
-type Tier = (typeof tierList)[number];
+const upgradeOptions = [
+  {
+    name: "Silver Account",
+    tierKey: "Silver",
+    price: 19700,
+    target: "intermediate traders",
+    perks: ["Moderate limits", "Standard withdrawals", "Basic support"],
+    icon: <Star className="h-6 w-6" />,
+    colorTheme:
+      "text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700",
+  },
+  {
+    name: "Premium Account",
+    tierKey: "Premium",
+    price: 35563,
+    target: "advanced traders",
+    perks: [
+      "Higher limits",
+      "Faster execution",
+      "Priority withdrawals",
+      "Advanced support",
+    ],
+    icon: <Zap className="h-6 w-6" />,
+    colorTheme:
+      "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800/50",
+  },
+  {
+    name: "Diamond Account",
+    tierKey: "Diamond",
+    price: 56000,
+    target: "elite traders",
+    perks: [
+      "Unlimited trading",
+      "Fast-track withdrawals",
+      "Personal account manager",
+    ],
+    icon: <Crown className="h-6 w-6" />,
+    colorTheme:
+      "text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-800/50",
+  },
+  {
+    name: "Ruby Account",
+    tierKey: "Ruby",
+    price: 100000,
+    target: "VIP traders",
+    perks: [
+      "Top-tier plan",
+      "Maximum benefits",
+      "Instant withdrawals",
+      "VIP support",
+    ],
+    icon: <Trophy className="h-6 w-6" />,
+    colorTheme:
+      "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800/50",
+  },
+];
 
-const tierIcons: Record<string, React.ReactNode> = {
-  Bronze: <Shield className="h-6 w-6" />,
-  Silver: <Star className="h-6 w-6" />,
-  Gold: <Award className="h-6 w-6" />,
-  Platinum: <Trophy className="h-6 w-6" />,
-  Diamond: <Crown className="h-6 w-6" />,
-};
-
-// Adaptive colors for Light/Dark modes
-const tierColors: Record<string, string> = {
-  Bronze: "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-400/10 border-orange-200 dark:border-orange-400/20",
-  Silver: "text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-400/10 border-slate-200 dark:border-slate-400/20",
-  Gold: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-400/10 border-amber-200 dark:border-amber-400/20",
-  Platinum: "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-400/10 border-indigo-200 dark:border-indigo-400/20",
-  Diamond: "text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-400/10 border-cyan-200 dark:border-cyan-400/20",
-};
-
-export default function BannerPage() {
-  const [totalDeposits, setTotalDeposits] = useState(0);
-  const [totalReferrals, setTotalReferrals] = useState(0);
-  const [activeTier, setActiveTier] = useState<Tier>(tierList[0]);
-  const [nextTier, setNextTier] = useState<Tier | null>(null);
+export default function AccountUpgradePage() {
   const [loading, setLoading] = useState(true);
+  const [currentRank, setCurrentRank] = useState<string>("Silver");
+  const [showWarning, setShowWarning] = useState<boolean>(false);
+  const [accountStatus, setAccountStatus] = useState<string>("active");
 
   // --- DATA FETCHING ---
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchUser = async () => {
       try {
         const user = await getUser();
         if (!user?.$id) return;
@@ -62,226 +91,225 @@ export default function BannerPage() {
         const profileRes = await databases.listDocuments(
           DB_ID,
           PROFILE_COLLECTION_ID,
-          [Query.equal("userId", user.$id)]
+          [Query.equal("userId", user.$id)],
         );
 
-        const profileDoc = profileRes.documents[0];
-        if (!profileDoc) return;
+        if (profileRes.documents.length > 0) {
+          const profile = profileRes.documents[0];
 
-        const [depositsRes, referralsRes] = await Promise.all([
-          databases.listDocuments(DB_ID, TRANSACTION_COLLECTION, [
-            Query.equal("userId", user.$id),
-            Query.equal("type", "deposit"),
-            Query.equal("status", "approved"),
-          ]),
-          databases.listDocuments(DB_ID, PROFILE_COLLECTION_ID, [
-            Query.equal("referredBy", profileDoc.refereeId),
-          ]),
-        ]);
+          // 1. Fetch and map integer tierLevel to string name
+          const tierMap: Record<number, string> = {
+            1: "Silver",
+            2: "Premium",
+            3: "Diamond",
+            4: "Ruby",
+          };
+          const userTierLevel = profile.tierLevel ?? 1;
+          setCurrentRank(tierMap[userTierLevel] || "Silver");
 
-        const totalDeposit = depositsRes.documents.reduce(
-          (sum, tx) => sum + (Number(tx.amount) || 0), 0
-        ) || 0;
+          // 2. Check if the admin triggered the rank warning notice
+          setShowWarning(profile.rankWarning === true);
 
-        const totalReferralCount = referralsRes.total || 0;
-
-        setTotalDeposits(totalDeposit);
-        setTotalReferrals(totalReferralCount);
-
-        // Logic to determine Tier
-        const tiersNormalized = tierList.map((t) => ({
-          ...t,
-          deposit: Number(t.deposit),
-          referrals: Number(t.referrals),
-        }));
-
-        const qualifiedTiers = tiersNormalized
-          .slice()
-          .sort((a, b) => a.deposit - b.deposit || a.referrals - b.referrals)
-          .filter((tier) => totalDeposit >= tier.deposit && totalReferralCount >= tier.referrals);
-
-        const currentTier = qualifiedTiers.length > 0 ? qualifiedTiers[qualifiedTiers.length - 1] : tiersNormalized[0];
-        setActiveTier(currentTier);
-
-        const next = tiersNormalized.find(
-          (tier) => (tier.deposit > totalDeposit || tier.referrals > totalReferralCount) && tier.name !== currentTier.name
-        ) || null;
-
-        setNextTier(next);
+          // 3. Fetch account status (active, reviewing_upgrade, dormant, suspended)
+          setAccountStatus(profile.accountStatus ?? "active");
+        }
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.error("Error fetching user profile:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchUser();
   }, []);
 
-  // --- PROGRESS LOGIC ---
-  const progressToNextTier = useMemo(() => {
-    if (!nextTier) return 100;
-
-    const currentDepositReq = Number(activeTier.deposit);
-    const currentReferralReq = Number(activeTier.referrals);
-    const nextDepositReq = Number(nextTier.deposit);
-    const nextReferralReq = Number(nextTier.referrals);
-
-    const depositGap = Math.max(nextDepositReq - currentDepositReq, 1);
-    const referralGap = Math.max(nextReferralReq - currentReferralReq, 1);
-
-    const depositProgress = Math.min(100, ((totalDeposits - currentDepositReq) / depositGap) * 100);
-    const referralProgress = Math.min(100, ((totalReferrals - currentReferralReq) / referralGap) * 100);
-
-    return Math.round(Math.max(0, (depositProgress + referralProgress) / 2));
-  }, [nextTier, activeTier, totalDeposits, totalReferrals]);
-
-  const missingDeposit = nextTier ? Math.max(0, Number(nextTier.deposit) - totalDeposits) : 0;
-  const missingReferrals = nextTier ? Math.max(0, Number(nextTier.referrals) - totalReferrals) : 0;
-
-  if (loading) return (
-    <div className="space-y-8 animate-pulse">
-      <div className="h-80 w-full bg-gray-200 dark:bg-white/5 rounded-[2rem]" />
-      <div className="h-64 w-full bg-gray-200 dark:bg-white/5 rounded-[2rem]" />
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="space-y-8 animate-pulse">
+        <div className="h-64 w-full bg-gray-200 dark:bg-white/5 rounded-[2rem]" />
+        <div className="h-80 w-full bg-gray-200 dark:bg-white/5 rounded-[2rem]" />
+      </div>
+    );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      
-      {/* 1. HERO STATUS CARD */}
-      <div className="relative overflow-hidden rounded-[2rem] border border-gray-200 bg-white shadow-xl dark:border-white/10 dark:bg-black/40 dark:backdrop-blur-xl dark:shadow-2xl">
-        {/* Background Ambience (Dark Mode Only) */}
-        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-brand-500/5 blur-[100px] rounded-full pointer-events-none hidden dark:block" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row gap-8 items-start md:items-center justify-between p-8">
-          
-          {/* Rank Info */}
-          <div className="flex items-center gap-6">
-            <div className={cn(
-              "relative flex h-24 w-24 items-center justify-center rounded-3xl border-2 shadow-sm dark:shadow-[0_0_30px_rgba(0,0,0,0.2)]",
-              tierColors[activeTier.name]
-            )}>
-              {tierIcons[activeTier.name]}
-              <div className="absolute -bottom-3 px-3 py-1 rounded-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-wider text-gray-900 dark:text-white shadow-sm">
-                Rank {tierList.findIndex(t => t.name === activeTier.name) + 1}
-              </div>
-            </div>
-            
-            <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1">Current Status</p>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">{activeTier.name} Member</h1>
-              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 dark:bg-white/5 border border-emerald-100 dark:border-white/10 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <Zap className="h-3 w-3 fill-current" />
-                {activeTier.boost}% APY Boost Active
-              </div>
-            </div>
-          </div>
+    <div className="space-y-8 animate-in fade-in duration-500 max-w-6xl mx-auto">
+      {/* Dynamic Status Banners based on accountStatus */}
+      {accountStatus === "reviewing_upgrade" && (
+        <div className="flex items-center gap-3 p-5 rounded-[1.5rem] bg-blue-50 border border-blue-200 text-blue-800 shadow-sm dark:bg-blue-900/20 dark:border-blue-800/50 dark:text-blue-200">
+          <Loader2 className="h-6 w-6 animate-spin flex-shrink-0" />
+          <p className="text-sm font-medium">
+            <strong>Upgrade in Progress:</strong> Your account upgrade is
+            currently under review by our support team. We will notify you once
+            the process is complete.
+          </p>
+        </div>
+      )}
 
-          {/* Mini Stats */}
-          <div className="flex w-full md:w-auto gap-4">
-            <div className="flex-1 md:flex-none p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10">
-              <p className="text-[10px] uppercase text-gray-500 dark:text-gray-400 mb-1">Lifetime Deposits</p>
-              <p className="text-xl font-mono font-bold text-gray-900 dark:text-white">${totalDeposits.toLocaleString()}</p>
+      {accountStatus === "dormant" && (
+        <div className="flex items-center gap-3 p-5 rounded-[1.5rem] bg-red-50 border border-red-200 text-red-800 shadow-sm dark:bg-red-900/20 dark:border-red-800/50 dark:text-red-200">
+          <ShieldAlert className="h-6 w-6 flex-shrink-0" />
+          <p className="text-sm font-medium">
+            <strong>Account Dormant:</strong> Your trading and withdrawal
+            features are currently restricted. Please contact support
+            immediately to upgrade and restore full access.
+          </p>
+        </div>
+      )}
+
+      {accountStatus === "suspended" && (
+        <div className="flex items-center gap-3 p-5 rounded-[1.5rem] bg-red-50 border border-red-200 text-red-800 shadow-sm dark:bg-red-900/20 dark:border-red-800/50 dark:text-red-200">
+          <AlertTriangle className="h-6 w-6 flex-shrink-0" />
+          <p className="text-sm font-medium">
+            <strong>Account Suspended:</strong> Your account has been suspended.
+            Please contact our support team for further assistance.
+          </p>
+        </div>
+      )}
+
+      {/* 1. URGENT NOTICE CARD (Only shows if admin sets rankWarning to true) */}
+      {showWarning && (
+        <div className="relative overflow-hidden rounded-[2rem] border border-amber-200 bg-amber-50 shadow-xl dark:border-amber-900/50 dark:bg-amber-950/20 dark:shadow-2xl p-8 md:p-10 animate-in slide-in-from-top-4">
+          <div className="flex flex-col md:flex-row gap-6 items-start">
+            <div className="flex-shrink-0 p-4 bg-amber-100 dark:bg-amber-900/50 rounded-full border border-amber-200 dark:border-amber-800">
+              <AlertTriangle className="h-10 w-10 text-amber-600 dark:text-amber-500" />
             </div>
-            <div className="flex-1 md:flex-none p-4 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10">
-              <p className="text-[10px] uppercase text-gray-500 dark:text-gray-400 mb-1">Referrals</p>
-              <p className="text-xl font-mono font-bold text-gray-900 dark:text-white">{totalReferrals}</p>
+
+            <div className="space-y-4 text-amber-900 dark:text-amber-100 w-full">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <h1 className="text-2xl md:text-3xl font-bold">
+                  Action Required: Account Upgrade
+                </h1>
+                <div className="px-4 py-1.5 rounded-full bg-amber-200/50 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 text-sm font-semibold">
+                  Current Rank: {currentRank}
+                </div>
+              </div>
+
+              <p className="text-base leading-relaxed">
+                <strong>Dear Valued client,</strong>
+                <br />
+                <br />
+                Your current account type cannot support your present balance,
+                mainly due to the high returns on investment (ROI) and rapid
+                profit growth within a short period.
+              </p>
+
+              <p className="text-base leading-relaxed">
+                Your account was initially created at a basic level, and the
+                significant turnover in profit over a short time has triggered a
+                review. To prevent your account from becoming dormant—where
+                trading will be restricted, referrals may not function properly,
+                and withdrawals may be unavailable—you are required to upgrade
+                your account.
+              </p>
+
+              <div className="mt-6 p-5 bg-white/60 dark:bg-black/20 rounded-xl border border-amber-200/50 dark:border-amber-900/30">
+                <h3 className="font-semibold flex items-center gap-2 mb-3">
+                  <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-500" />
+                  Account Protection Guarantee
+                </h3>
+                <p className="text-sm mb-2">
+                  Your account is protected under the following regulatory
+                  bodies:
+                </p>
+                <ul className="space-y-2 text-sm font-medium">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-600 dark:text-emerald-500" />
+                    The Market in Financial Instruments Directive (MiFID)
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 text-emerald-600 dark:text-emerald-500" />
+                    The regulatory agency with which your broker is registered
+                    (Coverage against unfair losses)
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Next Level Progress */}
-        {nextTier && (
-          <div className="mt-4 border-t border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 p-8">
-            <div className="flex justify-between items-end mb-3">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300 flex items-center gap-2">
-                  Next Level: <span className="text-brand-600 dark:text-white font-bold">{nextTier.name}</span>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                </p>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex flex-wrap gap-2">
-                  {missingDeposit > 0 && <span>Need ${missingDeposit.toLocaleString()} deposits</span>}
-                  {missingDeposit > 0 && missingReferrals > 0 && <span>•</span>}
-                  {missingReferrals > 0 && <span>Need {missingReferrals} referrals</span>}
-                </div>
-              </div>
-              <span className="text-xl font-bold text-brand-600 dark:text-brand-500">{Math.round(progressToNextTier)}%</span>
-            </div>
-            <div className="h-3 w-full bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-brand-600 to-indigo-600 dark:from-brand-500 dark:to-indigo-500 transition-all duration-1000 ease-out rounded-full"
-                style={{ width: `${progressToNextTier}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 2. TIER GRID */}
+      {/* 2. UPGRADE OPTIONS GRID */}
       <div>
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-brand-600 dark:text-brand-500" />
-          Reward Tiers
-        </h3>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {tierList.map((tier, idx) => {
-            const isActive = tier.name === activeTier.name;
-            const isUnlocked = idx <= tierList.findIndex(t => t.name === activeTier.name);
-            const style = tierColors[tier.name];
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            Available Upgrade Options
+          </h3>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-2">
+            <HeadphonesIcon className="h-4 w-4" />
+            Contact Support to process your upgrade
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {upgradeOptions.map((plan) => {
+            const isActive = plan.tierKey === currentRank;
 
             return (
               <div
-                key={tier.name}
+                key={plan.name}
                 className={cn(
-                  "relative flex flex-col p-5 rounded-3xl border transition-all duration-300",
-                  isActive 
-                    ? "bg-white dark:bg-white/10 border-brand-500 dark:border-brand-500/50 shadow-lg scale-105 z-10" 
-                    : isUnlocked
-                      ? "bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 opacity-100"
-                      : "bg-gray-50 dark:bg-white/[0.02] border-transparent opacity-60 grayscale hover:grayscale-0 hover:opacity-100"
+                  "relative flex flex-col p-6 rounded-3xl border transition-all duration-300 hover:shadow-xl hover:-translate-y-1",
+                  plan.colorTheme,
+                  isActive &&
+                    "ring-2 ring-emerald-500 dark:ring-emerald-400 shadow-xl scale-[1.02]", // Highlight active rank
                 )}
               >
-                {/* Header Icon */}
-                <div className="flex justify-between items-start mb-4">
-                  <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl border", style)}>
-                    {tierIcons[tier.name]}
+                {/* Header */}
+                <div className="flex justify-between items-start mb-6">
+                  <div className="p-3 bg-white dark:bg-black/20 rounded-xl shadow-sm border border-current/10">
+                    {plan.icon}
                   </div>
-                  {isUnlocked ? (
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  ) : (
-                    <Lock className="h-5 w-5 text-gray-400" />
+                  {isActive && (
+                    <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-500/30">
+                      <CheckCircle2 className="h-3 w-3" /> Active
+                    </span>
                   )}
                 </div>
 
-                {/* Name & Boost */}
-                <div className="mb-4">
-                  <h4 className="font-bold text-gray-900 dark:text-white">{tier.name}</h4>
-                  <div className="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    <ArrowUp className="h-3 w-3" />
-                    {tier.boost}% Boost
+                {/* Pricing & Name */}
+                <div className="mb-6">
+                  <h4 className="text-xl font-bold mb-2">{plan.name}</h4>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-black">
+                      ${plan.price.toLocaleString()}
+                    </span>
                   </div>
+                  <p className="text-sm mt-2 opacity-80 uppercase tracking-wider font-semibold text-[10px]">
+                    For {plan.target}
+                  </p>
                 </div>
 
-                {/* Requirements */}
-                <div className="mt-auto space-y-2 pt-4 border-t border-gray-100 dark:border-white/10">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500 dark:text-gray-400">Deposit</span>
-                    <span className="font-mono font-medium text-gray-900 dark:text-white">${Number(tier.deposit).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500 dark:text-gray-400">Referrals</span>
-                    <span className="font-mono font-medium text-gray-900 dark:text-white">{tier.referrals}</span>
-                  </div>
-                </div>
+                {/* Perks List */}
+                <ul className="space-y-3 mb-8 flex-1">
+                  {plan.perks.map((perk, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-2 text-sm font-medium opacity-90"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                      {perk}
+                    </li>
+                  ))}
+                </ul>
 
+                {/* Informational Footer */}
+                <div className="mt-auto pt-4 border-t border-current/10">
+                  <p className="text-xs text-center font-medium opacity-80">
+                    {isActive
+                      ? "This is your current account plan."
+                      : accountStatus === "reviewing_upgrade"
+                        ? "Upgrade request pending..."
+                        : accountStatus === "dormant" ||
+                            accountStatus === "suspended"
+                          ? "Account restricted. Contact support."
+                          : "Fund balance and contact support to activate."}
+                  </p>
+                </div>
               </div>
             );
           })}
         </div>
       </div>
-
     </div>
   );
 }
